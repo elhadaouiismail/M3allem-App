@@ -22,13 +22,13 @@ import {
   Map as MapIcon,
   List,
   Navigation,
-  Loader2, // Stable loader
+  Loader2,
   Camera,
   Upload,
-  Lock,   // For Admin
-  Check,  // For Admin
-  Trash2, // For Admin
-  Eye     // For Admin
+  Lock,   
+  Check,  
+  Trash2, 
+  Eye     
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -42,8 +42,8 @@ import {
   where,
   serverTimestamp,
   orderBy,
-  updateDoc, // For verifying pros
-  deleteDoc, // For rejecting pros
+  updateDoc,
+  deleteDoc,
   doc
 } from 'firebase/firestore';
 import { 
@@ -59,7 +59,7 @@ import {
 } from 'firebase/storage';
 
 /**
- * M3ALLEM - Connected MVP v3 (Admin Panel + Stability Fixes)
+ * M3ALLEM - Connected MVP v4 (With Image Compression)
  */
 
 // --- CONFIGURATION & INIT ---
@@ -93,6 +93,40 @@ const SERVICES = [
   { id: 'menage', name: 'Ménage', icon: Home, color: 'bg-green-100 text-green-600' },
   { id: 'bricolage', name: 'Bricolage', icon: Hammer, color: 'bg-gray-100 text-gray-600' },
 ];
+
+// --- UTILS: IMAGE COMPRESSION ---
+const compressImage = (file) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800; // Resize large photos to max 800px width
+        const scaleSize = MAX_WIDTH / img.width;
+        
+        // If image is smaller than max, don't resize
+        if (scaleSize >= 1) {
+            resolve(file);
+            return;
+        }
+
+        canvas.width = MAX_WIDTH;
+        canvas.height = img.height * scaleSize;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // Compress to JPEG with 0.7 quality
+        canvas.toBlob((blob) => {
+          resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.7);
+      };
+    };
+  });
+};
 
 // --- MAIN COMPONENT ---
 export default function App() {
@@ -158,14 +192,8 @@ export default function App() {
     const prosQuery = query(collection(db, 'artifacts', appId, 'public', 'data', 'pros'));
     const unsubPros = onSnapshot(prosQuery, (snapshot) => {
       const allPros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Filter logic:
-      // Public only sees verified pros
       setPros(allPros.filter(p => p.verified === true)); 
-      
-      // Admin sees UNVERIFIED pros
       setPendingPros(allPros.filter(p => p.verified === false));
-      
       setLoading(false);
     }, (error) => console.error("Error fetching pros:", error));
 
@@ -220,12 +248,16 @@ export default function App() {
       let profileUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${regForm.name}`; 
       let cinUrl = null;
 
+      // COMPRESS AND UPLOAD PROFILE IMAGE
       if (profileImage) {
-        profileUrl = await uploadFile(profileImage, `pros/${user.uid}/profile_${timestamp}.jpg`);
+        const compressedProfile = await compressImage(profileImage);
+        profileUrl = await uploadFile(compressedProfile, `pros/${user.uid}/profile_${timestamp}.jpg`);
       }
       
+      // COMPRESS AND UPLOAD CIN IMAGE
       if (cinImage) {
-        cinUrl = await uploadFile(cinImage, `pros/${user.uid}/cin_${timestamp}.jpg`);
+        const compressedCin = await compressImage(cinImage);
+        cinUrl = await uploadFile(compressedCin, `pros/${user.uid}/cin_${timestamp}.jpg`);
       }
 
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'pros'), {
@@ -233,18 +265,18 @@ export default function App() {
         ...regForm,
         rating: 5.0,
         reviews: 0,
-        verified: false, // Default unverified
+        verified: false,
         image: profileUrl,
         cin_image: cinUrl,
         mapX: Math.floor(Math.random() * 80) + 10,
         mapY: Math.floor(Math.random() * 80) + 10
       });
 
-      showNotification("Profil créé ! En attente de validation par l'admin.");
+      showNotification("Profil créé ! En attente de validation.");
       setIsRegisteringPro(false);
     } catch (err) {
       console.error(err);
-      showNotification("Erreur d'inscription.");
+      showNotification("Erreur d'inscription. Vérifiez votre connexion.");
     } finally {
       setIsUploading(false);
     }
