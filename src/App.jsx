@@ -22,7 +22,13 @@ import {
   Map as MapIcon,
   List,
   Navigation,
-  Loader2 
+  Loader2, // Stable loader
+  Camera,
+  Upload,
+  Lock,   // For Admin
+  Check,  // For Admin
+  Trash2, // For Admin
+  Eye     // For Admin
 } from 'lucide-react';
 
 // --- FIREBASE IMPORTS ---
@@ -35,16 +41,25 @@ import {
   query, 
   where,
   serverTimestamp,
-  orderBy
+  orderBy,
+  updateDoc, // For verifying pros
+  deleteDoc, // For rejecting pros
+  doc
 } from 'firebase/firestore';
 import { 
   getAuth, 
   signInAnonymously, 
   onAuthStateChanged
 } from 'firebase/auth';
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL
+} from 'firebase/storage';
 
 /**
- * M3ALLEM - Connected MVP
+ * M3ALLEM - Connected MVP v3 (Admin Panel + Stability Fixes)
  */
 
 // --- CONFIGURATION & INIT ---
@@ -67,7 +82,7 @@ try {
 
 const auth = getAuth(app);
 const db = getFirestore(app);
-// We keep the internal ID same to preserve your test data, but UI shows M3allem
+const storage = getStorage(app);
 const appId = 'kounhany-public'; 
 
 // --- CONSTANTS ---
@@ -77,25 +92,6 @@ const SERVICES = [
   { id: 'electricien', name: 'Électricité', icon: Zap, color: 'bg-yellow-100 text-yellow-600' },
   { id: 'menage', name: 'Ménage', icon: Home, color: 'bg-green-100 text-green-600' },
   { id: 'bricolage', name: 'Bricolage', icon: Hammer, color: 'bg-gray-100 text-gray-600' },
-];
-
-const SEED_PROS = [
-  {
-    name: "Ahmed Benali", service: "plombier", city: "Casablanca", quartier: "Maarif",
-    rating: 4.8, reviews: 124, verified: true, price: "150",
-    bio: "Plombier professionnel avec 10 ans d'expérience.",
-    phone: "+212 600 000 000",
-    image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Ahmed&gender=male",
-    mapX: 45, mapY: 30
-  },
-  {
-    name: "Fatima Zahra", service: "menage", city: "Rabat", quartier: "Agdal",
-    rating: 4.9, reviews: 89, verified: true, price: "200",
-    bio: "Service de nettoyage impeccable.",
-    phone: "+212 600 000 001",
-    image: "https://api.dicebear.com/7.x/avataaars/svg?seed=Fatima&gender=female",
-    mapX: 60, mapY: 55
-  }
 ];
 
 // --- MAIN COMPONENT ---
@@ -110,6 +106,11 @@ export default function App() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   
+  // Admin State
+  const [adminPass, setAdminPass] = useState('');
+  const [isAdminAuth, setIsAdminAuth] = useState(false);
+  const [pendingPros, setPendingPros] = useState([]);
+  
   // Selection State
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedCity, setSelectedCity] = useState('Casablanca');
@@ -119,6 +120,10 @@ export default function App() {
 
   // Pro Registration State
   const [isRegisteringPro, setIsRegisteringPro] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [profileImage, setProfileImage] = useState(null);
+  const [cinImage, setCinImage] = useState(null);
+
   const [regForm, setRegForm] = useState({ 
     name: '', 
     service: 'plombier', 
@@ -149,16 +154,18 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
+    // Fetch ALL pros (for admin) and Verified pros (for users)
     const prosQuery = query(collection(db, 'artifacts', appId, 'public', 'data', 'pros'));
     const unsubPros = onSnapshot(prosQuery, (snapshot) => {
-      const fetchedPros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPros(fetchedPros);
+      const allPros = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      if (fetchedPros.length === 0) {
-        SEED_PROS.forEach(async (pro) => {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'pros'), pro);
-        });
-      }
+      // Filter logic:
+      // Public only sees verified pros
+      setPros(allPros.filter(p => p.verified === true)); 
+      
+      // Admin sees UNVERIFIED pros
+      setPendingPros(allPros.filter(p => p.verified === false));
+      
       setLoading(false);
     }, (error) => console.error("Error fetching pros:", error));
 
@@ -176,7 +183,6 @@ export default function App() {
   const handleBooking = async (e) => {
     e.preventDefault();
     if (!user) return;
-    
     try {
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'jobs'), {
         client_id: user.uid,
@@ -194,30 +200,87 @@ export default function App() {
       navigate('home');
     } catch (err) {
       showNotification("Erreur lors de la réservation.");
-      console.error(err);
     }
+  };
+
+  const uploadFile = async (file, path) => {
+    if (!file) return null;
+    const storageRef = ref(storage, path);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
   };
 
   const handleProRegistration = async (e) => {
     e.preventDefault();
     if (!user) return;
+    setIsUploading(true);
 
     try {
+      const timestamp = Date.now();
+      let profileUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${regForm.name}`; 
+      let cinUrl = null;
+
+      if (profileImage) {
+        profileUrl = await uploadFile(profileImage, `pros/${user.uid}/profile_${timestamp}.jpg`);
+      }
+      
+      if (cinImage) {
+        cinUrl = await uploadFile(cinImage, `pros/${user.uid}/cin_${timestamp}.jpg`);
+      }
+
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'pros'), {
         owner_id: user.uid,
         ...regForm,
         rating: 5.0,
         reviews: 0,
-        verified: false,
-        image: `https://api.dicebear.com/7.x/avataaars/svg?seed=${regForm.name}&gender=male`,
+        verified: false, // Default unverified
+        image: profileUrl,
+        cin_image: cinUrl,
         mapX: Math.floor(Math.random() * 80) + 10,
         mapY: Math.floor(Math.random() * 80) + 10
       });
-      showNotification("Compte Pro créé ! Bienvenue.");
+
+      showNotification("Profil créé ! En attente de validation par l'admin.");
       setIsRegisteringPro(false);
     } catch (err) {
       console.error(err);
-      showNotification("Erreur de création du profil.");
+      showNotification("Erreur d'inscription.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // --- ADMIN ACTIONS ---
+  const handleAdminLogin = (e) => {
+    e.preventDefault();
+    if (adminPass === 'admin2025') {
+      setIsAdminAuth(true);
+      setView('admin_dashboard');
+    } else {
+      showNotification("Mot de passe incorrect");
+    }
+  };
+
+  const verifyPro = async (proId) => {
+    try {
+      const proRef = doc(db, 'artifacts', appId, 'public', 'data', 'pros', proId);
+      await updateDoc(proRef, { verified: true });
+      showNotification("Professionnel validé !");
+    } catch (err) {
+      console.error(err);
+      showNotification("Erreur lors de la validation");
+    }
+  };
+
+  const rejectPro = async (proId) => {
+    if(!window.confirm("Êtes-vous sûr de vouloir supprimer ce profil ?")) return;
+    try {
+      const proRef = doc(db, 'artifacts', appId, 'public', 'data', 'pros', proId);
+      await deleteDoc(proRef);
+      showNotification("Profil supprimé.");
+    } catch (err) {
+      console.error(err);
+      showNotification("Erreur lors de la suppression");
     }
   };
 
@@ -232,8 +295,7 @@ export default function App() {
   };
 
   // --- FILTERED DATA ---
-  
-  const myProProfile = user ? pros.find(p => p.owner_id === user.uid) : null;
+  const myProProfile = user ? pros.find(p => p.owner_id === user.uid) || pendingPros.find(p => p.owner_id === user.uid) : null;
   
   const myRelevantJobs = userRole === 'pro' && myProProfile
     ? jobs.filter(j => j.pro_id === myProProfile.id)
@@ -246,7 +308,87 @@ export default function App() {
     return matchCity && matchCat;
   });
 
-  // --- RENDER FUNCTIONS (FIXED) ---
+  // --- RENDER FUNCTIONS ---
+
+  const renderAdminDashboard = () => (
+    <div className="min-h-screen bg-gray-100 p-4">
+      <div className="bg-white rounded-xl shadow-sm p-4 mb-6 flex justify-between items-center">
+        <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          <ShieldCheck className="text-red-600"/> Admin Dashboard
+        </h2>
+        <button onClick={() => setView('home')} className="text-gray-500"><LogOut size={20}/></button>
+      </div>
+
+      <h3 className="font-bold text-gray-700 mb-4">En attente de validation ({pendingPros.length})</h3>
+      
+      {pendingPros.length === 0 && (
+        <div className="text-center py-12 text-gray-400">
+          <CheckCircle size={48} className="mx-auto mb-2 opacity-20"/>
+          <p>Tout est à jour !</p>
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {pendingPros.map(pro => (
+          <div key={pro.id} className="bg-white rounded-xl p-4 shadow-md border-l-4 border-yellow-400">
+            <div className="flex gap-4">
+              <img src={pro.image} className="w-16 h-16 rounded-full bg-gray-100 object-cover"/>
+              <div>
+                <h4 className="font-bold text-lg">{pro.name}</h4>
+                <p className="text-sm text-gray-500">{pro.service} • {pro.city}</p>
+                <p className="text-sm text-gray-500">{pro.phone || "Pas de téléphone"}</p>
+              </div>
+            </div>
+            
+            {/* CIN Display */}
+            <div className="mt-4 bg-gray-50 p-3 rounded-lg">
+              <p className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1"><Eye size={12}/> Preuve d'identité (CIN)</p>
+              {pro.cin_image ? (
+                <a href={pro.cin_image} target="_blank" rel="noreferrer">
+                  <img src={pro.cin_image} className="w-full h-32 object-cover rounded-lg border border-gray-200 hover:opacity-90 cursor-pointer"/>
+                </a>
+              ) : (
+                <p className="text-red-500 text-xs italic">Aucune image CIN téléchargée</p>
+              )}
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => verifyPro(pro.id)} className="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold hover:bg-green-700 flex items-center justify-center gap-2">
+                <Check size={18}/> Valider
+              </button>
+              <button onClick={() => rejectPro(pro.id)} className="flex-1 bg-red-100 text-red-600 py-2 rounded-lg font-bold hover:bg-red-200 flex items-center justify-center gap-2">
+                <Trash2 size={18}/> Refuser
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderAdminLogin = () => (
+    <div className="min-h-screen bg-gray-900 flex flex-col justify-center p-6">
+      <div className="max-w-sm mx-auto w-full text-center">
+        <ShieldCheck size={48} className="text-red-500 mx-auto mb-4"/>
+        <h2 className="text-2xl font-bold text-white mb-6">Accès Administrateur</h2>
+        <form onSubmit={handleAdminLogin} className="space-y-4">
+          <input 
+            type="password" 
+            placeholder="Mot de passe secret" 
+            className="w-full p-4 rounded-xl bg-gray-800 border-gray-700 text-white text-center text-lg tracking-widest"
+            value={adminPass}
+            onChange={(e) => setAdminPass(e.target.value)}
+          />
+          <button type="submit" className="w-full bg-red-600 text-white py-4 rounded-xl font-bold hover:bg-red-700">
+            Entrer
+          </button>
+          <button type="button" onClick={() => setView('login')} className="text-gray-500 text-sm mt-4">
+            Retour
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 
   const renderLandingPage = () => (
     <div className="flex flex-col min-h-screen bg-gray-50">
@@ -388,7 +530,7 @@ export default function App() {
          </div>
          <div className="container mx-auto px-4 -mt-12 relative">
             <div className="bg-white rounded-2xl shadow-lg p-6 text-center border border-gray-100">
-               <img src={selectedPro.image} className="w-24 h-24 rounded-full border-4 border-white shadow-md mx-auto -mt-16 bg-gray-100" />
+               <img src={selectedPro.image} className="w-24 h-24 rounded-full border-4 border-white shadow-md mx-auto -mt-16 bg-gray-100 object-cover" />
                <h2 className="text-xl font-bold mt-3 flex items-center justify-center gap-2">{selectedPro.name} {selectedPro.verified && <ShieldCheck size={20} className="text-emerald-500" />}</h2>
                <p className="text-gray-500 text-sm">{selectedPro.quartier}, {selectedPro.city}</p>
                <div className="flex justify-center gap-6 mt-6 border-t border-b border-gray-50 py-4">
@@ -467,17 +609,49 @@ export default function App() {
            <div className="max-w-md mx-auto bg-white rounded-2xl shadow-sm p-6">
              <h2 className="text-xl font-bold mb-6">Création Profil Pro</h2>
              <form onSubmit={handleProRegistration} className="space-y-4">
-               <input required placeholder="Votre Nom complet" className="w-full p-3 bg-gray-50 rounded-lg border" value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} />
-               <select className="w-full p-3 bg-gray-50 rounded-lg border" value={regForm.service} onChange={e => setRegForm({...regForm, service: e.target.value})}>
-                 {SERVICES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-               </select>
-               <select className="w-full p-3 bg-gray-50 rounded-lg border" value={regForm.city} onChange={e => setRegForm({...regForm, city: e.target.value})}>
-                 {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-               </select>
+               {/* 1. Name */}
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-1">Nom Complet</label>
+                 <input required placeholder="Votre Nom" className="w-full p-3 bg-gray-50 rounded-lg border" value={regForm.name} onChange={e => setRegForm({...regForm, name: e.target.value})} />
+               </div>
+
+               {/* 2. Photo Upload */}
+               <div>
+                 <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2"><Camera size={16}/> Photo de Profil</label>
+                 <input type="file" accept="image/*" onChange={(e) => setProfileImage(e.target.files[0])} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"/>
+               </div>
+
+               {/* 3. CIN Upload (Critical) */}
+               <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                 <label className="block text-sm font-bold text-yellow-800 mb-1 flex items-center gap-2"><ShieldCheck size={16}/> Photo CIN (Obligatoire)</label>
+                 <p className="text-xs text-yellow-700 mb-2">Pour vérifier votre identité. Ne sera pas visible publiquement.</p>
+                 <input required type="file" accept="image/*" onChange={(e) => setCinImage(e.target.files[0])} className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-100 file:text-yellow-700 hover:file:bg-yellow-200"/>
+               </div>
+
+               {/* 4. Details */}
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Service</label>
+                   <select className="w-full p-3 bg-gray-50 rounded-lg border" value={regForm.service} onChange={e => setRegForm({...regForm, service: e.target.value})}>
+                     {SERVICES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                   </select>
+                 </div>
+                 <div>
+                   <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
+                   <select className="w-full p-3 bg-gray-50 rounded-lg border" value={regForm.city} onChange={e => setRegForm({...regForm, city: e.target.value})}>
+                     {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
+                   </select>
+                 </div>
+               </div>
+
                <input required placeholder="Votre Quartier (ex: Maarif)" className="w-full p-3 bg-gray-50 rounded-lg border" value={regForm.quartier} onChange={e => setRegForm({...regForm, quartier: e.target.value})} />
                <input required type="number" placeholder="Prix de base (DH)" className="w-full p-3 bg-gray-50 rounded-lg border" value={regForm.price} onChange={e => setRegForm({...regForm, price: e.target.value})} />
                <textarea required placeholder="Courte bio (votre expérience, spécialités...)" className="w-full p-3 bg-gray-50 rounded-lg border h-24" value={regForm.bio} onChange={e => setRegForm({...regForm, bio: e.target.value})} />
-               <button type="submit" className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold">Confirmer l'inscription</button>
+               
+               <button disabled={isUploading} type="submit" className="w-full bg-emerald-600 text-white py-4 rounded-xl font-bold flex justify-center items-center gap-2">
+                 {isUploading ? <Loader2 className="animate-spin"/> : <Upload size={20} />}
+                 {isUploading ? "Téléchargement..." : "Confirmer l'inscription"}
+               </button>
                <button type="button" onClick={() => setIsRegisteringPro(false)} className="w-full text-gray-500 py-2">Annuler</button>
              </form>
            </div>
@@ -504,8 +678,8 @@ export default function App() {
 
         <div className="container mx-auto p-4 max-w-2xl">
           <div className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-emerald-500 mb-6">
-            <h3 className="font-bold flex items-center gap-2 text-gray-800"><ShieldCheck size={20} className="text-emerald-600"/> Statut: Vérifié (Demo)</h3>
-            <p className="text-sm text-gray-500 mt-1">Bonjour {myProProfile.name}. Vous êtes visible à {myProProfile.city}.</p>
+            <h3 className="font-bold flex items-center gap-2 text-gray-800"><ShieldCheck size={20} className="text-emerald-600"/> Statut: {myProProfile.verified ? "Vérifié" : "En attente de validation"}</h3>
+            <p className="text-sm text-gray-500 mt-1">Bonjour {myProProfile.name}. {myProProfile.verified ? "Vous êtes visible !" : "Votre profil est en cours de vérification."}</p>
           </div>
 
           <h3 className="font-bold text-gray-700 mb-4 px-1">Demandes entrantes ({myRelevantJobs.length})</h3>
@@ -552,6 +726,13 @@ export default function App() {
             <Briefcase size={20} /> Espace Professionnel
           </button>
         </div>
+        
+        {/* SECRET ADMIN ACCESS */}
+        <div className="mt-12 flex justify-center">
+          <button onClick={() => setView('admin_login')} className="text-gray-200 hover:text-gray-400 p-2">
+            <Lock size={16} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -571,6 +752,8 @@ export default function App() {
       {view === 'booking' && renderBookingPage()}
       {view === 'pro_dashboard' && renderProDashboard()}
       {view === 'login' && renderLoginPage()}
+      {view === 'admin_login' && renderAdminLogin()}
+      {view === 'admin_dashboard' && renderAdminDashboard()}
     </div>
   );
 }
