@@ -254,6 +254,26 @@ export default function App() {
   // --- HELPERS ---
   const navigate = (v) => { window.scrollTo(0,0); setView(v); };
   const showNotification = (msg) => { setNotification(msg); setTimeout(() => setNotification(null), 3000); };
+  
+  // Clean Logout Function
+  const handleLogout = () => {
+    setLoading(true); // Visual feedback immediately
+    setTimeout(() => {
+      // Clear all session state
+      setUserRole(null);
+      setTermsAccepted(false);
+      setIsRegisteringPro(false);
+      setProfileImage(null);
+      setCinImage(null);
+      setProfilePreview(null);
+      setCinPreview(null);
+      // Reset Forms
+      setRegForm({ name: '', service: 'plombier', city: 'Casablanca', quartier: '', price: '', bio: '' });
+      
+      setView('login');
+      setLoading(false);
+    }, 500); // Short delay to smooth transition
+  };
 
   // --- DATA FILTERING ---
   const myProProfile = userRole === 'pro' 
@@ -500,7 +520,7 @@ export default function App() {
       <div className="space-y-2">
         <button onClick={()=>{setUserRole('pro'); navigate('pro_dashboard')}} className="w-full bg-white p-4 rounded-xl flex items-center justify-between shadow-sm"><span className="flex items-center gap-3 font-medium"><Briefcase size={20} className="text-emerald-600"/> Espace Pro</span><ChevronRight size={16} className="text-gray-400"/></button>
         <button onClick={()=>{setView('admin_login')}} className="w-full bg-white p-4 rounded-xl flex items-center justify-between shadow-sm"><span className="flex items-center gap-3 font-medium"><Lock size={20} className="text-gray-400"/> Admin</span><ChevronRight size={16} className="text-gray-400"/></button>
-        <button onClick={()=>{setUserRole(null); setTermsAccepted(false); navigate('login');}} className="w-full bg-white p-4 rounded-xl flex items-center justify-between shadow-sm text-red-500"><span className="flex items-center gap-3 font-medium"><LogOut size={20}/> Déconnexion</span></button>
+        <button onClick={handleLogout} className="w-full bg-white p-4 rounded-xl flex items-center justify-between shadow-sm text-red-500"><span className="flex items-center gap-3 font-medium"><LogOut size={20}/> Déconnexion</span></button>
       </div>
     </div>
   );
@@ -579,6 +599,8 @@ export default function App() {
       </div>
     );
   }
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-emerald-600" size={40}/></div>;
 
   if (view === 'login') return (
     <>
