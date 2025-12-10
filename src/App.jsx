@@ -9,8 +9,8 @@ import {
 /**
  * M3ALLEM - STANDALONE DEMO VERSION
  * Updates:
- * 1. Removed "Fake" Stock Photos (replaced with generic placeholders).
- * 2. Added "Empty Space" UI for image uploads (Large tap targets).
+ * 1. Added Terms of Service Modal with full legal text.
+ * 2. Terms link is now clickable on Login screen.
  */
 
 // --- CONSTANTS ---
@@ -22,10 +22,8 @@ const SERVICES = [
   { id: 'bricolage', name: 'Bricolage', icon: Hammer, color: 'bg-gray-100 text-gray-600' },
 ];
 
-// Generic placeholder for seed data (No more fake faces)
 const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
-// --- SEED DATA ---
 const SEED_PROS = [
   {
     id: 'seed_1',
@@ -39,7 +37,7 @@ const SEED_PROS = [
     rating: 4.8,
     reviews: 124,
     verified: true,
-    image: PLACEHOLDER_IMG, // Replaced stock photo
+    image: PLACEHOLDER_IMG,
     map_x: 45,
     map_y: 30
   },
@@ -55,7 +53,7 @@ const SEED_PROS = [
     rating: 4.9,
     reviews: 85,
     verified: true,
-    image: PLACEHOLDER_IMG, // Replaced stock photo
+    image: PLACEHOLDER_IMG,
     map_x: 48,
     map_y: 32
   }
@@ -93,14 +91,15 @@ export default function App() {
   const [isUploading, setIsUploading] = useState(false);
   const [adminPass, setAdminPass] = useState('');
   
-  // Terms Check State
+  // Terms State
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   
   // Forms & Previews
   const [profileImage, setProfileImage] = useState(null);
-  const [profilePreview, setProfilePreview] = useState(null); // Instant preview
+  const [profilePreview, setProfilePreview] = useState(null); 
   const [cinImage, setCinImage] = useState(null);
-  const [cinPreview, setCinPreview] = useState(null); // Instant preview
+  const [cinPreview, setCinPreview] = useState(null); 
   
   const [regForm, setRegForm] = useState({ name: '', service: 'plombier', city: 'Casablanca', quartier: '', price: '', bio: '' });
   const [bookingForm, setBookingForm] = useState({ date: '', time: 'Matin', desc: '' });
@@ -127,6 +126,7 @@ export default function App() {
     }, 300);
   };
 
+  // ... (Save/Update logic remains the same)
   const savePro = (newPro) => {
     const current = JSON.parse(localStorage.getItem('m3allem_pros')) || SEED_PROS;
     localStorage.setItem('m3allem_pros', JSON.stringify([...current, newPro]));
@@ -161,7 +161,6 @@ export default function App() {
 
   const handleProRegistration = async (e) => {
     e.preventDefault();
-    
     if (!profileImage) { showNotification("Erreur: Photo de profil obligatoire !"); return; }
     if (!cinImage) { showNotification("Erreur: Photo CIN obligatoire !"); return; }
 
@@ -184,7 +183,6 @@ export default function App() {
       savePro(newPro);
       showNotification("Profil créé ! En attente de validation.");
       setIsRegisteringPro(false);
-      // Reset form
       setProfilePreview(null);
       setCinPreview(null);
     } catch (err) { 
@@ -214,6 +212,44 @@ export default function App() {
   const filteredPros = pros.filter(p => (selectedCategory ? p.service === selectedCategory : true) && (selectedCity ? p.city === selectedCity : true));
 
   // --- COMPONENTS ---
+
+  const TermsModal = () => (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div className="p-5 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="font-bold text-lg text-gray-900">Conditions d'Utilisation</h3>
+          <button onClick={() => setShowTermsModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18}/></button>
+        </div>
+        <div className="p-6 overflow-y-auto text-sm text-gray-600 leading-relaxed space-y-4">
+          <p className="font-bold text-gray-900">1. Introduction</p>
+          <p>Bienvenue sur M3allem. Cette application met en relation des particuliers et des prestataires de services indépendants. En utilisant l'application, vous acceptez ces conditions.</p>
+          
+          <p className="font-bold text-gray-900">2. Rôle de M3allem</p>
+          <p>M3allem est un intermédiaire technique. Nous ne sommes pas l'employeur des Maallems. Le contrat est formé directement entre le client et le prestataire.</p>
+          
+          <p className="font-bold text-gray-900">3. Inscription & Vérification</p>
+          <p>Les Maallems certifient l'authenticité de leurs documents (CIN, Photo). M3allem vérifie l'identité mais ne garantit pas la qualité finale des travaux.</p>
+          
+          <p className="font-bold text-gray-900">4. Paiements (Cash on Delivery)</p>
+          <p>Le paiement se fait en espèces directement entre le Client et le Maallem. L'accès à l'application est gratuit pour le lancement.</p>
+          
+          <p className="font-bold text-gray-900">5. Responsabilité</p>
+          <p>M3allem décline toute responsabilité en cas de dommages ou malfaçons. En cas de litige, nous pouvons agir comme médiateur amiable.</p>
+          
+          <p className="font-bold text-gray-900">6. Données (CNDP)</p>
+          <p>Vos données (Nom, Tél, CIN) sont collectées uniquement pour la mise en relation, conformément à la loi 09-08.</p>
+        </div>
+        <div className="p-5 border-t border-gray-100 bg-gray-50 rounded-b-3xl">
+          <button 
+            onClick={() => { setTermsAccepted(true); setShowTermsModal(false); }}
+            className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition"
+          >
+            J'accepte les conditions
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   const BottomNav = () => (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 py-2 px-6 flex justify-between items-center z-50 pb-safe">
@@ -271,6 +307,12 @@ export default function App() {
           ))}
         </div>
       </div>
+      <div className="mt-8 px-4">
+        <div className="bg-gray-900 rounded-2xl p-6 text-white flex justify-between items-center shadow-lg relative overflow-hidden">
+          <div className="relative z-10"><h4 className="font-bold text-lg mb-1">Devenez Pro</h4><p className="text-gray-400 text-xs mb-3">Gagnez plus de clients.</p><button onClick={()=>{setUserRole('pro'); navigate('pro_dashboard')}} className="bg-white text-gray-900 px-4 py-2 rounded-lg text-xs font-bold">Commencer</button></div>
+          <Briefcase size={80} className="text-gray-800 absolute -right-4 -bottom-4"/>
+        </div>
+      </div>
       <div className="mt-8 px-4 mb-4">
         <h3 className="font-bold text-gray-800 text-lg mb-4">Maallems Populaires</h3>
         <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 no-scrollbar">
@@ -289,6 +331,7 @@ export default function App() {
     </div>
   );
 
+  // ... (Keep existing renderSearchPage, renderProDashboard, etc. as they are) ...
   const renderSearchPage = () => (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-20">
       <div className="bg-white p-4 shadow-sm sticky top-0 z-10">
@@ -345,35 +388,14 @@ export default function App() {
           <input required placeholder="Prix de base (DH)" className="w-full p-4 rounded-xl border-none shadow-sm" type="number" value={regForm.price} onChange={e=>setRegForm({...regForm, price: e.target.value})}/>
           <textarea placeholder="Votre expérience..." className="w-full p-4 rounded-xl border-none shadow-sm h-24" value={regForm.bio} onChange={e=>setRegForm({...regForm, bio: e.target.value})}/>
           
-          {/* LARGE UPLOAD BOXES */}
           <div className="space-y-4">
             <p className="font-bold text-gray-700">Photos</p>
-            
-            {/* Profile Photo Upload */}
             <label className={`w-full h-32 border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition ${profilePreview ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 bg-gray-50 hover:bg-gray-100'}`}>
-              {profilePreview ? (
-                <img src={profilePreview} className="h-full w-full object-contain rounded-lg p-2" alt="Preview"/>
-              ) : (
-                <>
-                  <Camera size={24} className="text-gray-400 mb-2"/>
-                  <span className="text-sm font-medium text-gray-500">Photo de Profil (Obligatoire)</span>
-                  <span className="text-xs text-gray-400">Appuyez pour ajouter</span>
-                </>
-              )}
+              {profilePreview ? <img src={profilePreview} className="h-full w-full object-contain rounded-lg p-2" alt="Preview"/> : <><Camera size={24} className="text-gray-400 mb-2"/><span className="text-sm font-medium text-gray-500">Photo de Profil (Obligatoire)</span><span className="text-xs text-gray-400">Appuyez pour ajouter</span></>}
               <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageChange(e, 'profile')} />
             </label>
-
-            {/* CIN Upload */}
             <label className={`w-full h-32 border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition ${cinPreview ? 'border-yellow-500 bg-yellow-50' : 'border-yellow-300 bg-yellow-50 hover:bg-yellow-100'}`}>
-              {cinPreview ? (
-                <img src={cinPreview} className="h-full w-full object-contain rounded-lg p-2" alt="Preview"/>
-              ) : (
-                <>
-                  <ShieldCheck size={24} className="text-yellow-600 mb-2"/>
-                  <span className="text-sm font-bold text-yellow-800">Photo CIN (Obligatoire)</span>
-                  <span className="text-xs text-yellow-600">Preuve d'identité</span>
-                </>
-              )}
+              {cinPreview ? <img src={cinPreview} className="h-full w-full object-contain rounded-lg p-2" alt="Preview"/> : <><ShieldCheck size={24} className="text-yellow-600 mb-2"/><span className="text-sm font-bold text-yellow-800">Photo CIN (Obligatoire)</span><span className="text-xs text-yellow-600">Preuve d'identité</span></>}
               <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageChange(e, 'cin')} />
             </label>
           </div>
@@ -418,8 +440,7 @@ export default function App() {
     );
   }
 
-  // ... (Keep existing simple render functions: renderProfilePage, renderMyBookings, renderProDetailsPage, renderBookingPage, renderAdminLogin, renderAdminDashboard, renderLoginPage) ...
-  
+  // ... (ProfilePage, MyBookings, ProDetailsPage, BookingPage, AdminLogin, AdminDashboard remain same) ...
   const renderProfilePage = () => (
     <div className="min-h-screen bg-gray-50 pb-20 p-4">
       <h2 className="text-2xl font-bold mb-6">Mon Compte</h2>
@@ -569,7 +590,7 @@ export default function App() {
             onChange={(e) => setTermsAccepted(e.target.checked)}
           />
           <label htmlFor="terms" className="text-sm text-gray-600">
-            J'accepte les <span className="underline font-bold text-emerald-700 cursor-pointer">conditions d'utilisation</span>
+            J'accepte les <span onClick={() => setShowTermsModal(true)} className="underline font-bold text-emerald-700 cursor-pointer">conditions d'utilisation</span>
           </label>
         </div>
 
@@ -597,7 +618,12 @@ export default function App() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-emerald-600" size={40}/></div>;
 
-  if (view === 'login') return renderLoginPage();
+  if (view === 'login') return (
+    <>
+      {showTermsModal && <TermsModal />}
+      {renderLoginPage()}
+    </>
+  );
   if (view === 'admin_login') return renderAdminLogin();
   if (view === 'admin_dashboard') return renderAdminDashboard();
   if (view === 'pro_dashboard') return renderProDashboard();
