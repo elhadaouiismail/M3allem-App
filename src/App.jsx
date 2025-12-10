@@ -3,14 +3,13 @@ import {
   MapPin, Search, Star, ShieldCheck, Phone, MessageCircle, User, Briefcase, 
   CheckCircle, Clock, Menu, X, Wallet, Hammer, Zap, Droplets, Home, ChevronRight, 
   LogOut, Map as MapIcon, List, Navigation, Loader2, Camera, Upload, Lock, Check, Trash2, Eye,
-  Bell, Calendar, FileText, Image as ImageIcon
+  Bell, Calendar, FileText
 } from 'lucide-react';
 
 /**
  * M3ALLEM - STANDALONE DEMO VERSION
- * Updates:
- * 1. Added Terms of Service Modal with full legal text.
- * 2. Terms link is now clickable on Login screen.
+ * Fix: Removed external dependencies to guarantee app runs without build errors.
+ * Data is saved to your browser's LocalStorage.
  */
 
 // --- CONSTANTS ---
@@ -22,8 +21,10 @@ const SERVICES = [
   { id: 'bricolage', name: 'Bricolage', icon: Hammer, color: 'bg-gray-100 text-gray-600' },
 ];
 
+// Generic placeholder for seed data
 const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
+// --- SEED DATA (For fresh start) ---
 const SEED_PROS = [
   {
     id: 'seed_1',
@@ -59,23 +60,23 @@ const SEED_PROS = [
   }
 ];
 
-// --- UTILS ---
+// --- UTILS: Image to Base64 (Simulates Upload) ---
 const compressImage = (file) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
-      resolve(event.target.result);
+      resolve(event.target.result); // Returns base64 string
     };
   });
 };
 
 export default function App() {
   const [userId, setUserId] = useState(null);
-  const [view, setView] = useState('home'); 
+  const [view, setView] = useState('home');
   const [userRole, setUserRole] = useState(null);
   
-  // Data
+  // Data State
   const [pros, setPros] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [pendingPros, setPendingPros] = useState([]);
@@ -95,17 +96,18 @@ export default function App() {
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
   
-  // Forms & Previews
+  // Forms
   const [profileImage, setProfileImage] = useState(null);
-  const [profilePreview, setProfilePreview] = useState(null); 
+  const [profilePreview, setProfilePreview] = useState(null);
   const [cinImage, setCinImage] = useState(null);
-  const [cinPreview, setCinPreview] = useState(null); 
+  const [cinPreview, setCinPreview] = useState(null);
   
   const [regForm, setRegForm] = useState({ name: '', service: 'plombier', city: 'Casablanca', quartier: '', price: '', bio: '' });
   const [bookingForm, setBookingForm] = useState({ date: '', time: 'Matin', desc: '' });
 
   // --- INIT ---
   useEffect(() => {
+    // Simulate Auth Session
     let storedId = localStorage.getItem('m3allem_user_id');
     if (!storedId) {
       storedId = 'user_' + Math.random().toString(36).substr(2, 9);
@@ -115,10 +117,13 @@ export default function App() {
     fetchData();
   }, []);
 
+  // --- LOCAL DATA HANDLING ---
   const fetchData = async () => {
+    // Simulate API delay
     setTimeout(() => {
       const storedPros = JSON.parse(localStorage.getItem('m3allem_pros')) || SEED_PROS;
       const storedJobs = JSON.parse(localStorage.getItem('m3allem_jobs')) || [];
+      
       setPros(storedPros.filter(p => p.verified));
       setPendingPros(storedPros.filter(p => !p.verified));
       setJobs(storedJobs);
@@ -126,25 +131,34 @@ export default function App() {
     }, 300);
   };
 
-  // ... (Save/Update logic remains the same)
   const savePro = (newPro) => {
     const current = JSON.parse(localStorage.getItem('m3allem_pros')) || SEED_PROS;
-    localStorage.setItem('m3allem_pros', JSON.stringify([...current, newPro]));
-    fetchData();
-  };
-  const saveJob = (newJob) => {
-    const current = JSON.parse(localStorage.getItem('m3allem_jobs')) || [];
-    localStorage.setItem('m3allem_jobs', JSON.stringify([...current, newJob]));
-    fetchData();
-  };
-  const updateProStatus = (id, status) => {
-    const current = JSON.parse(localStorage.getItem('m3allem_pros')) || SEED_PROS;
-    const updated = status === 'deleted' ? current.filter(p => p.id !== id) : current.map(p => p.id === id ? { ...p, verified: true } : p);
+    const updated = [...current, newPro];
     localStorage.setItem('m3allem_pros', JSON.stringify(updated));
     fetchData();
   };
 
-  // --- HANDLERS ---
+  const saveJob = (newJob) => {
+    const current = JSON.parse(localStorage.getItem('m3allem_jobs')) || [];
+    const updated = [...current, newJob];
+    localStorage.setItem('m3allem_jobs', JSON.stringify(updated));
+    fetchData();
+  };
+
+  const updateProStatus = (id, status) => {
+    const current = JSON.parse(localStorage.getItem('m3allem_pros')) || SEED_PROS;
+    let updated;
+    if (status === 'deleted') {
+      updated = current.filter(p => p.id !== id);
+    } else {
+      updated = current.map(p => p.id === id ? { ...p, verified: true } : p);
+    }
+    localStorage.setItem('m3allem_pros', JSON.stringify(updated));
+    fetchData();
+  };
+
+  // --- ACTIONS ---
+
   const handleImageChange = (e, type) => {
     const file = e.target.files[0];
     if (file) {
@@ -165,57 +179,102 @@ export default function App() {
     if (!cinImage) { showNotification("Erreur: Photo CIN obligatoire !"); return; }
 
     setIsUploading(true);
+    
     try {
-      let profileUrl = await compressImage(profileImage);
-      let cinUrl = await compressImage(cinImage);
+      let profileUrl = PLACEHOLDER_IMG;
+      let cinUrl = null;
 
-      const newPro = { 
-        id: 'pro_' + Date.now(), 
-        owner_id: userId, 
-        ...regForm, 
-        rating: 5.0, 
-        reviews: 0, 
-        verified: false, 
-        image: profileUrl, 
-        cin_image: cinUrl 
+      // Simulate upload by converting to base64
+      if (profileImage) profileUrl = await compressImage(profileImage);
+      if (cinImage) cinUrl = await compressImage(cinImage);
+
+      const newPro = {
+        id: 'pro_' + Date.now(),
+        owner_id: userId,
+        ...regForm,
+        rating: 5.0,
+        reviews: 0,
+        verified: false,
+        image: profileUrl,
+        cin_image: cinUrl,
+        map_x: Math.floor(Math.random() * 80) + 10,
+        map_y: Math.floor(Math.random() * 80) + 10
       };
-      
+
       savePro(newPro);
       showNotification("Profil créé ! En attente de validation.");
       setIsRegisteringPro(false);
       setProfilePreview(null);
       setCinPreview(null);
-    } catch (err) { 
-      showNotification("Erreur lors de l'envoi."); 
-    } finally { 
-      setIsUploading(false); 
+    } catch (err) {
+      console.error(err);
+      showNotification("Erreur lors de l'upload.");
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleBooking = (e) => {
     e.preventDefault();
-    const newJob = { id: 'job_' + Date.now(), client_id: userId, pro_id: selectedPro.id, pro_name: selectedPro.name, service: selectedPro.service, ...bookingForm, city: selectedCity, status: 'Pending' };
+    const newJob = {
+      id: 'job_' + Date.now(),
+      client_id: userId,
+      pro_id: selectedPro.id,
+      pro_name: selectedPro.name,
+      service: selectedPro.service,
+      date: bookingForm.date,
+      time: bookingForm.time,
+      desc: bookingForm.desc,
+      city: selectedCity,
+      status: 'Pending'
+    };
     saveJob(newJob);
     showNotification("Demande envoyée !");
     navigate('home');
   };
 
-  const verifyProAction = (id) => { updateProStatus(id, 'verified'); showNotification("Validé !"); };
-  const rejectProAction = (id) => { if(confirm("Supprimer ?")) updateProStatus(id, 'deleted'); showNotification("Supprimé."); };
-  const handleAdminLogin = (e) => { e.preventDefault(); if(adminPass === 'admin2025') setView('admin_dashboard'); else showNotification("Incorrect"); };
+  // --- ADMIN ---
+  const verifyProAction = (id) => {
+    updateProStatus(id, 'verified');
+    showNotification("Pro Validé !");
+  };
 
+  const rejectProAction = (id) => {
+    if(!window.confirm("Supprimer ce profil ?")) return;
+    updateProStatus(id, 'deleted');
+    showNotification("Pro Supprimé.");
+  };
+
+  const handleAdminLogin = (e) => {
+    e.preventDefault();
+    if(adminPass === 'admin2025') setView('admin_dashboard');
+    else showNotification("Mot de passe incorrect");
+  };
+
+  // --- HELPERS ---
   const navigate = (v) => { window.scrollTo(0,0); setView(v); };
   const showNotification = (msg) => { setNotification(msg); setTimeout(() => setNotification(null), 3000); };
 
-  const myProProfile = userRole === 'pro' ? (pros.find(p => p.owner_id === userId) || pendingPros.find(p => p.owner_id === userId)) : null;
-  const myJobs = userRole === 'pro' && myProProfile ? jobs.filter(j => j.pro_id === myProProfile.id) : jobs.filter(j => j.client_id === userId);
-  const filteredPros = pros.filter(p => (selectedCategory ? p.service === selectedCategory : true) && (selectedCity ? p.city === selectedCity : true));
+  // --- DATA FILTERING ---
+  const myProProfile = userRole === 'pro' 
+    ? (pros.find(p => p.owner_id === userId) || pendingPros.find(p => p.owner_id === userId))
+    : null;
 
-  // --- COMPONENTS ---
+  const myJobs = userRole === 'pro' && myProProfile
+    ? jobs.filter(j => j.pro_id === myProProfile.id)
+    : jobs.filter(j => j.client_id === userId);
 
+  const filteredPros = pros.filter(p => {
+    return (selectedCategory ? p.service === selectedCategory : true) &&
+           (selectedCity ? p.city === selectedCity : true);
+  });
+
+  // --- VIEWS ---
+  
+  // Terms Modal Component
   const TermsModal = () => (
-    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl">
         <div className="p-5 border-b border-gray-100 flex justify-between items-center">
           <h3 className="font-bold text-lg text-gray-900">Conditions d'Utilisation</h3>
           <button onClick={() => setShowTermsModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18}/></button>
@@ -223,29 +282,19 @@ export default function App() {
         <div className="p-6 overflow-y-auto text-sm text-gray-600 leading-relaxed space-y-4">
           <p className="font-bold text-gray-900">1. Introduction</p>
           <p>Bienvenue sur M3allem. Cette application met en relation des particuliers et des prestataires de services indépendants. En utilisant l'application, vous acceptez ces conditions.</p>
-          
           <p className="font-bold text-gray-900">2. Rôle de M3allem</p>
           <p>M3allem est un intermédiaire technique. Nous ne sommes pas l'employeur des Maallems. Le contrat est formé directement entre le client et le prestataire.</p>
-          
           <p className="font-bold text-gray-900">3. Inscription & Vérification</p>
           <p>Les Maallems certifient l'authenticité de leurs documents (CIN, Photo). M3allem vérifie l'identité mais ne garantit pas la qualité finale des travaux.</p>
-          
           <p className="font-bold text-gray-900">4. Paiements (Cash on Delivery)</p>
           <p>Le paiement se fait en espèces directement entre le Client et le Maallem. L'accès à l'application est gratuit pour le lancement.</p>
-          
           <p className="font-bold text-gray-900">5. Responsabilité</p>
           <p>M3allem décline toute responsabilité en cas de dommages ou malfaçons. En cas de litige, nous pouvons agir comme médiateur amiable.</p>
-          
           <p className="font-bold text-gray-900">6. Données (CNDP)</p>
           <p>Vos données (Nom, Tél, CIN) sont collectées uniquement pour la mise en relation, conformément à la loi 09-08.</p>
         </div>
         <div className="p-5 border-t border-gray-100 bg-gray-50 rounded-b-3xl">
-          <button 
-            onClick={() => { setTermsAccepted(true); setShowTermsModal(false); }}
-            className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition"
-          >
-            J'accepte les conditions
-          </button>
+          <button onClick={() => { setTermsAccepted(true); setShowTermsModal(false); }} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition">J'accepte les conditions</button>
         </div>
       </div>
     </div>
@@ -315,23 +364,23 @@ export default function App() {
       </div>
       <div className="mt-8 px-4 mb-4">
         <h3 className="font-bold text-gray-800 text-lg mb-4">Maallems Populaires</h3>
+        {pros.length === 0 ? <p className="text-sm text-gray-400">Aucun maallem disponible.</p> :
         <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 no-scrollbar">
           {pros.slice(0,5).map(p => (
             <div key={p.id} onClick={()=>{setSelectedPro(p); navigate('pro_details')}} className="min-w-[140px] bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-col items-center text-center">
               <div className="w-14 h-14 rounded-full bg-gray-100 mb-2 border-2 border-emerald-100 shadow-sm overflow-hidden flex items-center justify-center">
-                 <img src={p.image} className="w-full h-full object-cover" alt={p.name}/>
+                 <img src={p.image || PLACEHOLDER_IMG} className="w-full h-full object-cover" alt={p.name}/>
               </div>
               <h4 className="font-bold text-sm text-gray-800 truncate w-full">{p.name}</h4>
               <p className="text-xs text-gray-400 mb-2">{p.service}</p>
               <div className="flex items-center gap-1 text-yellow-500 text-xs font-bold bg-yellow-50 px-2 py-1 rounded-full"><Star size={10} fill="currentColor"/> {p.rating}</div>
             </div>
           ))}
-        </div>
+        </div>}
       </div>
     </div>
   );
 
-  // ... (Keep existing renderSearchPage, renderProDashboard, etc. as they are) ...
   const renderSearchPage = () => (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-20">
       <div className="bg-white p-4 shadow-sm sticky top-0 z-10">
@@ -347,7 +396,7 @@ export default function App() {
         {filteredPros.length === 0 ? <div className="text-center py-20 text-gray-400"><Search size={48} className="mx-auto mb-2 opacity-20"/><p>Aucun pro trouvé.</p></div> : 
         filteredPros.map(p => (
           <div key={p.id} onClick={()=>{setSelectedPro(p); navigate('pro_details')}} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex gap-4">
-            <img src={p.image} className="w-20 h-20 rounded-xl bg-gray-200 object-cover"/>
+            <img src={p.image || PLACEHOLDER_IMG} className="w-20 h-20 rounded-xl bg-gray-200 object-cover"/>
             <div className="flex-grow">
               <div className="flex justify-between items-start">
                 <div><h3 className="font-bold text-gray-900">{p.name}</h3><p className="text-xs text-gray-500 flex items-center gap-1"><MapPin size={10}/> {p.quartier}</p></div>
@@ -440,7 +489,7 @@ export default function App() {
     );
   }
 
-  // ... (ProfilePage, MyBookings, ProDetailsPage, BookingPage, AdminLogin, AdminDashboard remain same) ...
+  // --- OTHERS ---
   const renderProfilePage = () => (
     <div className="min-h-screen bg-gray-50 pb-20 p-4">
       <h2 className="text-2xl font-bold mb-6">Mon Compte</h2>
@@ -481,7 +530,7 @@ export default function App() {
          </div>
          <div className="px-4 -mt-16 relative">
             <div className="bg-white rounded-3xl shadow-xl p-6 text-center border border-gray-100">
-               <img src={selectedPro.image} className="w-28 h-28 rounded-full border-4 border-white shadow-md mx-auto -mt-20 bg-gray-200 object-cover"/>
+               <img src={selectedPro.image || PLACEHOLDER_IMG} className="w-28 h-28 rounded-full border-4 border-white shadow-md mx-auto -mt-20 bg-gray-200 object-cover"/>
                <h2 className="text-2xl font-bold mt-3 flex justify-center items-center gap-1">{selectedPro.name} <ShieldCheck size={20} className="text-emerald-500"/></h2>
                <p className="text-gray-500 text-sm mb-6 flex justify-center items-center gap-1"><MapPin size={12}/> {selectedPro.quartier}, {selectedPro.city}</p>
                
@@ -530,93 +579,6 @@ export default function App() {
       </div>
     );
   }
-
-  function renderAdminLogin() {
-    return (
-      <div className="min-h-screen bg-gray-900 flex flex-col justify-center p-6 text-center">
-        <ShieldCheck size={48} className="text-red-500 mx-auto mb-4"/>
-        <h2 className="text-2xl font-bold text-white mb-6">Accès Admin</h2>
-        <form onSubmit={handleAdminLogin} className="space-y-4">
-          <input type="password" placeholder="Code Secret" className="w-full p-4 rounded-xl bg-gray-800 text-white text-center border-none outline-none focus:ring-2 ring-red-500" value={adminPass} onChange={e=>setAdminPass(e.target.value)}/>
-          <button className="w-full bg-red-600 text-white py-4 rounded-xl font-bold">Entrer</button>
-          <button type="button" onClick={() => setView('login')} className="text-gray-500">Retour</button>
-        </form>
-      </div>
-    );
-  }
-
-  function renderAdminDashboard() {
-    return (
-      <div className="min-h-screen bg-gray-100 p-4">
-        <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-gray-900">Admin Dashboard</h2><button onClick={()=>setView('login')}><LogOut/></button></div>
-        <h3 className="font-bold text-gray-600 mb-2">En attente ({pendingPros.length})</h3>
-        {pendingPros.map(p => (
-          <div key={p.id} className="bg-white p-4 rounded-xl shadow mb-4 border-l-4 border-yellow-400">
-            <div className="flex gap-4 mb-2">
-              <img src={p.image} className="w-12 h-12 rounded-full bg-gray-200 object-cover"/>
-              <div><h4 className="font-bold">{p.name}</h4><p className="text-sm text-gray-500">{p.service} • {p.city}</p></div>
-            </div>
-            <div className="bg-gray-50 p-2 rounded mb-2">
-               <p className="text-xs font-bold text-gray-500 mb-1">CIN / ID:</p>
-               {p.cin_image ? <img src={p.cin_image} className="w-full h-32 object-cover rounded border"/> : <span className="text-red-500 text-xs">Pas d'image</span>}
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => verifyProAction(p.id)} className="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold flex justify-center gap-1"><Check/> Valider</button>
-              <button onClick={() => rejectProAction(p.id)} className="flex-1 bg-red-100 text-red-600 py-2 rounded-lg font-bold flex justify-center gap-1"><Trash2/> Refuser</button>
-            </div>
-          </div>
-        ))}
-        {pendingPros.length === 0 && <p className="text-center text-gray-400 mt-10">Aucune demande.</p>}
-      </div>
-    );
-  }
-
-  function renderLoginPage() {
-    return (
-      <div className="min-h-screen bg-white flex flex-col justify-center p-6 text-center">
-        <div className="w-20 h-20 bg-emerald-100 rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-3">
-          <ShieldCheck size={40} className="text-emerald-600"/>
-        </div>
-        <h2 className="text-3xl font-extrabold text-gray-900 mb-2">M3allem</h2>
-        <p className="text-gray-500 mb-8">Services à domicile de confiance</p>
-        
-        {/* CHECKBOX FOR TERMS */}
-        <div className="mb-8 flex items-center justify-center gap-2">
-          <input 
-            type="checkbox" 
-            id="terms" 
-            className="w-5 h-5 accent-emerald-600 rounded"
-            checked={termsAccepted}
-            onChange={(e) => setTermsAccepted(e.target.checked)}
-          />
-          <label htmlFor="terms" className="text-sm text-gray-600">
-            J'accepte les <span onClick={() => setShowTermsModal(true)} className="underline font-bold text-emerald-700 cursor-pointer">conditions d'utilisation</span>
-          </label>
-        </div>
-
-        <div className="space-y-3">
-          <button 
-            disabled={!termsAccepted}
-            onClick={() => { setUserRole('client'); navigate('home'); }} 
-            className={`w-full p-4 rounded-2xl font-bold transition ${termsAccepted ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200 hover:scale-[1.02]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-          >
-            Continuer comme Client
-          </button>
-          
-          <button 
-            disabled={!termsAccepted}
-            onClick={() => { setUserRole('pro'); navigate('pro_dashboard'); }} 
-            className={`w-full border p-4 rounded-2xl font-bold transition ${termsAccepted ? 'bg-white text-gray-900 border-gray-200 hover:bg-gray-50' : 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'}`}
-          >
-            Espace Professionnel
-          </button>
-        </div>
-        <div className="mt-12"><button onClick={() => setView('admin_login')} className="text-gray-300 p-4"><Lock size={16}/></button></div>
-      </div>
-    );
-  }
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-emerald-600" size={40}/></div>;
 
   if (view === 'login') return (
     <>
