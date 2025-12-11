@@ -8,8 +8,10 @@ import {
 
 /**
  * M3ALLEM - STANDALONE DEMO VERSION
- * Fix: Removed external dependencies to guarantee app runs without build errors.
- * Data is saved to your browser's LocalStorage.
+ * Fixes:
+ * - Instant Logout (removed delay)
+ * - Pro Dashboard Logout now clears session correctly
+ * - Added Terms of Service Checkbox to Pro Registration
  */
 
 // --- CONSTANTS ---
@@ -21,10 +23,8 @@ const SERVICES = [
   { id: 'bricolage', name: 'Bricolage', icon: Hammer, color: 'bg-gray-100 text-gray-600' },
 ];
 
-// Generic placeholder for seed data
 const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
-// --- SEED DATA (For fresh start) ---
 const SEED_PROS = [
   {
     id: 'seed_1',
@@ -60,23 +60,23 @@ const SEED_PROS = [
   }
 ];
 
-// --- UTILS: Image to Base64 (Simulates Upload) ---
+// --- UTILS ---
 const compressImage = (file) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
-      resolve(event.target.result); // Returns base64 string
+      resolve(event.target.result);
     };
   });
 };
 
 export default function App() {
   const [userId, setUserId] = useState(null);
-  const [view, setView] = useState('home');
+  const [view, setView] = useState('home'); 
   const [userRole, setUserRole] = useState(null);
   
-  // Data State
+  // Data
   const [pros, setPros] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [pendingPros, setPendingPros] = useState([]);
@@ -93,21 +93,21 @@ export default function App() {
   const [adminPass, setAdminPass] = useState('');
   
   // Terms State
-  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false); // For Login
+  const [proTermsAccepted, setProTermsAccepted] = useState(false); // For Pro Registration
   const [showTermsModal, setShowTermsModal] = useState(false);
   
-  // Forms
+  // Forms & Previews
   const [profileImage, setProfileImage] = useState(null);
-  const [profilePreview, setProfilePreview] = useState(null);
+  const [profilePreview, setProfilePreview] = useState(null); 
   const [cinImage, setCinImage] = useState(null);
-  const [cinPreview, setCinPreview] = useState(null);
+  const [cinPreview, setCinPreview] = useState(null); 
   
   const [regForm, setRegForm] = useState({ name: '', service: 'plombier', city: 'Casablanca', quartier: '', price: '', bio: '' });
   const [bookingForm, setBookingForm] = useState({ date: '', time: 'Matin', desc: '' });
 
   // --- INIT ---
   useEffect(() => {
-    // Simulate Auth Session
     let storedId = localStorage.getItem('m3allem_user_id');
     if (!storedId) {
       storedId = 'user_' + Math.random().toString(36).substr(2, 9);
@@ -117,13 +117,10 @@ export default function App() {
     fetchData();
   }, []);
 
-  // --- LOCAL DATA HANDLING ---
   const fetchData = async () => {
-    // Simulate API delay
     setTimeout(() => {
       const storedPros = JSON.parse(localStorage.getItem('m3allem_pros')) || SEED_PROS;
       const storedJobs = JSON.parse(localStorage.getItem('m3allem_jobs')) || [];
-      
       setPros(storedPros.filter(p => p.verified));
       setPendingPros(storedPros.filter(p => !p.verified));
       setJobs(storedJobs);
@@ -133,31 +130,39 @@ export default function App() {
 
   const savePro = (newPro) => {
     const current = JSON.parse(localStorage.getItem('m3allem_pros')) || SEED_PROS;
-    const updated = [...current, newPro];
-    localStorage.setItem('m3allem_pros', JSON.stringify(updated));
+    localStorage.setItem('m3allem_pros', JSON.stringify([...current, newPro]));
     fetchData();
   };
-
   const saveJob = (newJob) => {
     const current = JSON.parse(localStorage.getItem('m3allem_jobs')) || [];
-    const updated = [...current, newJob];
-    localStorage.setItem('m3allem_jobs', JSON.stringify(updated));
+    localStorage.setItem('m3allem_jobs', JSON.stringify([...current, newJob]));
     fetchData();
   };
-
   const updateProStatus = (id, status) => {
     const current = JSON.parse(localStorage.getItem('m3allem_pros')) || SEED_PROS;
-    let updated;
-    if (status === 'deleted') {
-      updated = current.filter(p => p.id !== id);
-    } else {
-      updated = current.map(p => p.id === id ? { ...p, verified: true } : p);
-    }
+    const updated = status === 'deleted' ? current.filter(p => p.id !== id) : current.map(p => p.id === id ? { ...p, verified: true } : p);
     localStorage.setItem('m3allem_pros', JSON.stringify(updated));
     fetchData();
   };
 
   // --- ACTIONS ---
+  
+  // FIX: Instant Logout
+  const handleLogout = () => {
+    // Reset all session state immediately without delay
+    setUserRole(null);
+    setTermsAccepted(false);
+    setIsRegisteringPro(false);
+    setProfileImage(null);
+    setCinImage(null);
+    setProfilePreview(null);
+    setCinPreview(null);
+    setProTermsAccepted(false);
+    setRegForm({ name: '', service: 'plombier', city: 'Casablanca', quartier: '', price: '', bio: '' });
+    
+    // Force view to login
+    navigate('login');
+  };
 
   const handleImageChange = (e, type) => {
     const file = e.target.files[0];
@@ -177,124 +182,60 @@ export default function App() {
     e.preventDefault();
     if (!profileImage) { showNotification("Erreur: Photo de profil obligatoire !"); return; }
     if (!cinImage) { showNotification("Erreur: Photo CIN obligatoire !"); return; }
+    if (!proTermsAccepted) { showNotification("Erreur: Vous devez accepter les conditions !"); return; }
 
     setIsUploading(true);
-    
     try {
-      let profileUrl = PLACEHOLDER_IMG;
-      let cinUrl = null;
+      let profileUrl = await compressImage(profileImage);
+      let cinUrl = await compressImage(cinImage);
 
-      // Simulate upload by converting to base64
-      if (profileImage) profileUrl = await compressImage(profileImage);
-      if (cinImage) cinUrl = await compressImage(cinImage);
-
-      const newPro = {
-        id: 'pro_' + Date.now(),
-        owner_id: userId,
-        ...regForm,
-        rating: 5.0,
-        reviews: 0,
-        verified: false,
-        image: profileUrl,
-        cin_image: cinUrl,
-        map_x: Math.floor(Math.random() * 80) + 10,
-        map_y: Math.floor(Math.random() * 80) + 10
+      const newPro = { 
+        id: 'pro_' + Date.now(), 
+        owner_id: userId, 
+        ...regForm, 
+        rating: 5.0, 
+        reviews: 0, 
+        verified: false, 
+        image: profileUrl, 
+        cin_image: cinUrl 
       };
-
+      
       savePro(newPro);
       showNotification("Profil créé ! En attente de validation.");
       setIsRegisteringPro(false);
       setProfilePreview(null);
       setCinPreview(null);
-    } catch (err) {
-      console.error(err);
-      showNotification("Erreur lors de l'upload.");
-    } finally {
-      setIsUploading(false);
+    } catch (err) { 
+      showNotification("Erreur lors de l'envoi."); 
+    } finally { 
+      setIsUploading(false); 
     }
   };
 
   const handleBooking = (e) => {
     e.preventDefault();
-    const newJob = {
-      id: 'job_' + Date.now(),
-      client_id: userId,
-      pro_id: selectedPro.id,
-      pro_name: selectedPro.name,
-      service: selectedPro.service,
-      date: bookingForm.date,
-      time: bookingForm.time,
-      desc: bookingForm.desc,
-      city: selectedCity,
-      status: 'Pending'
-    };
+    const newJob = { id: 'job_' + Date.now(), client_id: userId, pro_id: selectedPro.id, pro_name: selectedPro.name, service: selectedPro.service, ...bookingForm, city: selectedCity, status: 'Pending' };
     saveJob(newJob);
     showNotification("Demande envoyée !");
     navigate('home');
   };
 
-  // --- ADMIN ---
-  const verifyProAction = (id) => {
-    updateProStatus(id, 'verified');
-    showNotification("Pro Validé !");
-  };
+  const verifyProAction = (id) => { updateProStatus(id, 'verified'); showNotification("Validé !"); };
+  const rejectProAction = (id) => { if(confirm("Supprimer ?")) updateProStatus(id, 'deleted'); showNotification("Supprimé."); };
+  const handleAdminLogin = (e) => { e.preventDefault(); if(adminPass === 'admin2025') setView('admin_dashboard'); else showNotification("Incorrect"); };
 
-  const rejectProAction = (id) => {
-    if(!window.confirm("Supprimer ce profil ?")) return;
-    updateProStatus(id, 'deleted');
-    showNotification("Pro Supprimé.");
-  };
-
-  const handleAdminLogin = (e) => {
-    e.preventDefault();
-    if(adminPass === 'admin2025') setView('admin_dashboard');
-    else showNotification("Mot de passe incorrect");
-  };
-
-  // --- HELPERS ---
   const navigate = (v) => { window.scrollTo(0,0); setView(v); };
   const showNotification = (msg) => { setNotification(msg); setTimeout(() => setNotification(null), 3000); };
-  
-  // Clean Logout Function
-  const handleLogout = () => {
-    setLoading(true); // Visual feedback immediately
-    setTimeout(() => {
-      // Clear all session state
-      setUserRole(null);
-      setTermsAccepted(false);
-      setIsRegisteringPro(false);
-      setProfileImage(null);
-      setCinImage(null);
-      setProfilePreview(null);
-      setCinPreview(null);
-      // Reset Forms
-      setRegForm({ name: '', service: 'plombier', city: 'Casablanca', quartier: '', price: '', bio: '' });
-      
-      setView('login');
-      setLoading(false);
-    }, 500); // Short delay to smooth transition
-  };
 
-  // --- DATA FILTERING ---
-  const myProProfile = userRole === 'pro' 
-    ? (pros.find(p => p.owner_id === userId) || pendingPros.find(p => p.owner_id === userId))
-    : null;
+  const myProProfile = userRole === 'pro' ? (pros.find(p => p.owner_id === userId) || pendingPros.find(p => p.owner_id === userId)) : null;
+  const myJobs = userRole === 'pro' && myProProfile ? jobs.filter(j => j.pro_id === myProProfile.id) : jobs.filter(j => j.client_id === userId);
+  const filteredPros = pros.filter(p => (selectedCategory ? p.service === selectedCategory : true) && (selectedCity ? p.city === selectedCity : true));
 
-  const myJobs = userRole === 'pro' && myProProfile
-    ? jobs.filter(j => j.pro_id === myProProfile.id)
-    : jobs.filter(j => j.client_id === userId);
+  // --- COMPONENTS ---
 
-  const filteredPros = pros.filter(p => {
-    return (selectedCategory ? p.service === selectedCategory : true) &&
-           (selectedCity ? p.city === selectedCity : true);
-  });
-
-  // --- VIEWS ---
-  
-  // Terms Modal Component
   const TermsModal = () => (
-    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl">
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-md max-h-[80vh] flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200">
         <div className="p-5 border-b border-gray-100 flex justify-between items-center">
           <h3 className="font-bold text-lg text-gray-900">Conditions d'Utilisation</h3>
           <button onClick={() => setShowTermsModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18}/></button>
@@ -314,7 +255,16 @@ export default function App() {
           <p>Vos données (Nom, Tél, CIN) sont collectées uniquement pour la mise en relation, conformément à la loi 09-08.</p>
         </div>
         <div className="p-5 border-t border-gray-100 bg-gray-50 rounded-b-3xl">
-          <button onClick={() => { setTermsAccepted(true); setShowTermsModal(false); }} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition">J'accepte les conditions</button>
+          <button 
+            onClick={() => { 
+                if(!userRole) setTermsAccepted(true); // For Login flow
+                else setProTermsAccepted(true); // For Pro flow
+                setShowTermsModal(false); 
+            }}
+            className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition"
+          >
+            J'accepte les conditions
+          </button>
         </div>
       </div>
     </div>
@@ -352,9 +302,8 @@ export default function App() {
             </div>
             <span className="font-bold text-lg tracking-wide">M3allem</span>
           </div>
-          <button className="relative">
-            <Bell size={24}/>
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-emerald-600"></span>
+          <button onClick={handleLogout} className="relative bg-white/10 p-2 rounded-full hover:bg-white/20">
+             <LogOut size={20} />
           </button>
         </div>
         <h1 className="text-3xl font-extrabold mb-2 leading-tight">Besoin d'un <br/>Maallem ?</h1>
@@ -440,7 +389,7 @@ export default function App() {
         <h2 className="text-2xl font-bold">Devenir Partenaire</h2>
         <p className="text-gray-500 mb-8 max-w-xs mx-auto">Rejoignez le réseau M3allem et trouvez des clients gratuitement.</p>
         <button onClick={() => setIsRegisteringPro(true)} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-emerald-200">Créer mon profil</button>
-        <button onClick={() => navigate('login')} className="mt-6 text-gray-400 text-sm">Retour à l'accueil</button>
+        <button onClick={() => navigate('home')} className="mt-6 text-gray-400 text-sm">Retour à l'accueil</button>
       </div>
     );
 
@@ -469,7 +418,20 @@ export default function App() {
             </label>
           </div>
 
-          <button disabled={isUploading} className="w-full bg-black text-white py-4 rounded-xl font-bold flex justify-center gap-2 mt-4">
+          <div className="flex items-center justify-start gap-2 pt-2">
+            <input 
+              type="checkbox" 
+              id="pro-terms" 
+              className="w-5 h-5 accent-emerald-600 rounded"
+              checked={proTermsAccepted}
+              onChange={(e) => setProTermsAccepted(e.target.checked)}
+            />
+            <label htmlFor="pro-terms" className="text-sm text-gray-600">
+              J'accepte les <span onClick={() => setShowTermsModal(true)} className="underline font-bold text-emerald-700 cursor-pointer">conditions d'utilisation</span>
+            </label>
+          </div>
+
+          <button disabled={isUploading || !proTermsAccepted} className={`w-full text-white py-4 rounded-xl font-bold flex justify-center gap-2 mt-4 ${proTermsAccepted ? 'bg-black' : 'bg-gray-300 cursor-not-allowed'}`}>
             {isUploading ? <Loader2 className="animate-spin"/> : <Upload/>} {isUploading ? "Envoi..." : "Confirmer"}
           </button>
           <button type="button" onClick={()=>setIsRegisteringPro(false)} className="w-full text-gray-500 py-4">Annuler</button>
@@ -481,7 +443,7 @@ export default function App() {
       <div className="min-h-screen bg-gray-100">
         <div className="bg-gray-900 text-white p-4 flex justify-between items-center sticky top-0 z-10 shadow-md">
           <div className="flex items-center gap-2"><div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center font-bold">P</div><span className="font-bold">Espace Pro</span></div>
-          <button onClick={() => navigate('login')}><LogOut size={18}/></button>
+          <button onClick={handleLogout}><LogOut size={18}/></button>
         </div>
         <div className="p-4">
           <div className={`p-4 rounded-xl shadow-sm mb-6 border-l-4 ${myProProfile.verified ? 'bg-white border-green-500' : 'bg-yellow-50 border-yellow-500'}`}>
@@ -599,8 +561,6 @@ export default function App() {
       </div>
     );
   }
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-emerald-600" size={40}/></div>;
 
   if (view === 'login') return (
     <>
