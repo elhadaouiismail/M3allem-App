@@ -8,10 +8,9 @@ import {
 
 /**
  * M3ALLEM - STANDALONE DEMO VERSION
- * Fixes:
- * - Instant Logout (removed delay)
- * - Pro Dashboard Logout now clears session correctly
- * - Added Terms of Service Checkbox to Pro Registration
+ * Updates:
+ * - Cleared SEED_PROS (No more fake profiles on fresh load)
+ * - Enhanced Admin Dashboard: Now shows "Verified" pros so you can delete old test data.
  */
 
 // --- CONSTANTS ---
@@ -25,40 +24,8 @@ const SERVICES = [
 
 const PLACEHOLDER_IMG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23cbd5e1' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E";
 
-const SEED_PROS = [
-  {
-    id: 'seed_1',
-    owner_id: 'seed_owner',
-    name: "Ahmed Benali",
-    service: "plombier",
-    city: "Casablanca",
-    quartier: "Maarif",
-    price: "150",
-    bio: "Plombier expert avec 10 ans d'expérience.",
-    rating: 4.8,
-    reviews: 124,
-    verified: true,
-    image: PLACEHOLDER_IMG,
-    map_x: 45,
-    map_y: 30
-  },
-  {
-    id: 'seed_2',
-    owner_id: 'seed_owner_2',
-    name: "Fatima Zahra",
-    service: "menage",
-    city: "Rabat",
-    quartier: "Agdal",
-    price: "200",
-    bio: "Nettoyage professionnel et ponctuel.",
-    rating: 4.9,
-    reviews: 85,
-    verified: true,
-    image: PLACEHOLDER_IMG,
-    map_x: 48,
-    map_y: 32
-  }
-];
+// --- SEED DATA (CLEARED) ---
+const SEED_PROS = []; 
 
 // --- UTILS ---
 const compressImage = (file) => {
@@ -93,8 +60,8 @@ export default function App() {
   const [adminPass, setAdminPass] = useState('');
   
   // Terms State
-  const [termsAccepted, setTermsAccepted] = useState(false); // For Login
-  const [proTermsAccepted, setProTermsAccepted] = useState(false); // For Pro Registration
+  const [termsAccepted, setTermsAccepted] = useState(false); 
+  const [proTermsAccepted, setProTermsAccepted] = useState(false); 
   const [showTermsModal, setShowTermsModal] = useState(false);
   
   // Forms & Previews
@@ -147,9 +114,7 @@ export default function App() {
 
   // --- ACTIONS ---
   
-  // FIX: Instant Logout
   const handleLogout = () => {
-    // Reset all session state immediately without delay
     setUserRole(null);
     setTermsAccepted(false);
     setIsRegisteringPro(false);
@@ -159,8 +124,6 @@ export default function App() {
     setCinPreview(null);
     setProTermsAccepted(false);
     setRegForm({ name: '', service: 'plombier', city: 'Casablanca', quartier: '', price: '', bio: '' });
-    
-    // Force view to login
     navigate('login');
   };
 
@@ -221,7 +184,7 @@ export default function App() {
   };
 
   const verifyProAction = (id) => { updateProStatus(id, 'verified'); showNotification("Validé !"); };
-  const rejectProAction = (id) => { if(confirm("Supprimer ?")) updateProStatus(id, 'deleted'); showNotification("Supprimé."); };
+  const rejectProAction = (id) => { if(confirm("Supprimer ce profil ?")) updateProStatus(id, 'deleted'); showNotification("Supprimé."); };
   const handleAdminLogin = (e) => { e.preventDefault(); if(adminPass === 'admin2025') setView('admin_dashboard'); else showNotification("Incorrect"); };
 
   const navigate = (v) => { window.scrollTo(0,0); setView(v); };
@@ -257,8 +220,8 @@ export default function App() {
         <div className="p-5 border-t border-gray-100 bg-gray-50 rounded-b-3xl">
           <button 
             onClick={() => { 
-                if(!userRole) setTermsAccepted(true); // For Login flow
-                else setProTermsAccepted(true); // For Pro flow
+                if(!userRole) setTermsAccepted(true); 
+                else setProTermsAccepted(true); 
                 setShowTermsModal(false); 
             }}
             className="w-full bg-emerald-600 text-white py-3 rounded-xl font-bold hover:bg-emerald-700 transition"
@@ -561,6 +524,107 @@ export default function App() {
       </div>
     );
   }
+
+  function renderAdminLogin() {
+    return (
+      <div className="min-h-screen bg-gray-900 flex flex-col justify-center p-6 text-center">
+        <ShieldCheck size={48} className="text-red-500 mx-auto mb-4"/>
+        <h2 className="text-2xl font-bold text-white mb-6">Accès Admin</h2>
+        <form onSubmit={handleAdminLogin} className="space-y-4">
+          <input type="password" placeholder="Code Secret" className="w-full p-4 rounded-xl bg-gray-800 text-white text-center border-none outline-none focus:ring-2 ring-red-500" value={adminPass} onChange={e=>setAdminPass(e.target.value)}/>
+          <button className="w-full bg-red-600 text-white py-4 rounded-xl font-bold">Entrer</button>
+          <button type="button" onClick={() => setView('login')} className="text-gray-500">Retour</button>
+        </form>
+      </div>
+    );
+  }
+
+  function renderAdminDashboard() {
+    return (
+      <div className="min-h-screen bg-gray-100 p-4">
+        <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold text-gray-900">Admin Dashboard</h2><button onClick={handleLogout}><LogOut/></button></div>
+        
+        {/* NEW: SECTION 1 - PENDING */}
+        <h3 className="font-bold text-gray-600 mb-2">En attente ({pendingPros.length})</h3>
+        {pendingPros.map(p => (
+          <div key={p.id} className="bg-white p-4 rounded-xl shadow mb-4 border-l-4 border-yellow-400">
+            <div className="flex gap-4 mb-2">
+              <img src={p.image || PLACEHOLDER_IMG} className="w-12 h-12 rounded-full bg-gray-200 object-cover"/>
+              <div><h4 className="font-bold">{p.name}</h4><p className="text-sm text-gray-500">{p.service} • {p.city}</p></div>
+            </div>
+            <div className="bg-gray-50 p-2 rounded mb-2">
+               <p className="text-xs font-bold text-gray-500 mb-1">CIN / ID:</p>
+               {p.cin_image ? <img src={p.cin_image} className="w-full h-32 object-cover rounded border"/> : <span className="text-red-500 text-xs">Pas d'image</span>}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => verifyProAction(p.id)} className="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold flex justify-center gap-1"><Check/> Valider</button>
+              <button onClick={() => rejectProAction(p.id)} className="flex-1 bg-red-100 text-red-600 py-2 rounded-lg font-bold flex justify-center gap-1"><Trash2/> Refuser</button>
+            </div>
+          </div>
+        ))}
+        {pendingPros.length === 0 && <p className="text-sm text-gray-400 mb-6 italic">Aucune demande en attente.</p>}
+
+        {/* NEW: SECTION 2 - VERIFIED (Allows deleting old fakes) */}
+        <h3 className="font-bold text-gray-600 mb-2 pt-4 border-t">Validés ({pros.length})</h3>
+        {pros.map(p => (
+          <div key={p.id} className="bg-white p-3 rounded-xl shadow-sm mb-2 flex justify-between items-center opacity-75 hover:opacity-100 transition">
+             <div className="flex items-center gap-3">
+                <img src={p.image || PLACEHOLDER_IMG} className="w-10 h-10 rounded-full bg-gray-200 object-cover"/>
+                <div><h4 className="font-bold text-sm">{p.name}</h4><p className="text-xs text-gray-500">{p.service}</p></div>
+             </div>
+             <button onClick={() => rejectProAction(p.id)} className="bg-red-50 text-red-500 p-2 rounded-lg hover:bg-red-100"><Trash2 size={16}/></button>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function renderLoginPage() {
+    return (
+      <div className="min-h-screen bg-white flex flex-col justify-center p-6 text-center">
+        <div className="w-20 h-20 bg-emerald-100 rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-3">
+          <ShieldCheck size={40} className="text-emerald-600"/>
+        </div>
+        <h2 className="text-3xl font-extrabold text-gray-900 mb-2">M3allem</h2>
+        <p className="text-gray-500 mb-8">Services à domicile de confiance</p>
+        
+        {/* CHECKBOX FOR TERMS */}
+        <div className="mb-8 flex items-center justify-center gap-2">
+          <input 
+            type="checkbox" 
+            id="terms" 
+            className="w-5 h-5 accent-emerald-600 rounded"
+            checked={termsAccepted}
+            onChange={(e) => setTermsAccepted(e.target.checked)}
+          />
+          <label htmlFor="terms" className="text-sm text-gray-600">
+            J'accepte les <span onClick={() => setShowTermsModal(true)} className="underline font-bold text-emerald-700 cursor-pointer">conditions d'utilisation</span>
+          </label>
+        </div>
+
+        <div className="space-y-3">
+          <button 
+            disabled={!termsAccepted}
+            onClick={() => { setUserRole('client'); navigate('home'); }} 
+            className={`w-full p-4 rounded-2xl font-bold transition ${termsAccepted ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200 hover:scale-[1.02]' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+          >
+            Continuer comme Client
+          </button>
+          
+          <button 
+            disabled={!termsAccepted}
+            onClick={() => { setUserRole('pro'); navigate('pro_dashboard'); }} 
+            className={`w-full border p-4 rounded-2xl font-bold transition ${termsAccepted ? 'bg-white text-gray-900 border-gray-200 hover:bg-gray-50' : 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'}`}
+          >
+            Espace Professionnel
+          </button>
+        </div>
+        <div className="mt-12"><button onClick={() => setView('admin_login')} className="text-gray-300 p-4"><Lock size={16}/></button></div>
+      </div>
+    );
+  }
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-emerald-600" size={40}/></div>;
 
   if (view === 'login') return (
     <>
